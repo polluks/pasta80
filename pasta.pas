@@ -525,7 +525,7 @@ end;
 
 (**
  * Prepends a 128-byte AMSDOS header to the given binary, so the file
- * can be loaded via LOAD"file.cpc" without specifying an address.
+ * can be loaded via LOAD"file" without specifying an address.
  *)
 procedure AddAMSDOSHeader(const BinFile: String; const ProgName: String);
 const
@@ -7988,7 +7988,7 @@ begin
   if Binary = btCPM then
     BinFile := ChangeExt(SrcFile, '.com')
   else if Binary = btAmstrad then
-    BinFile := ChangeExt(SrcFile, '.cpc')
+    BinFile := ChangeExt(SrcFile, '')
   else if Format in [tfBinary, tfPlus3Dos, tfMOSlet] then
     BinFile := ChangeExt(SrcFile, '.bin')
   else if Format = tfRunDir then
