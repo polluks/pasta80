@@ -613,7 +613,7 @@ type
   (**
     * The four platforms we currently support.
    *)
-  TBinaryType = (btCPM, btZX, btZX128, btZXN, btAgon, btAmstrad);
+  TBinaryType = (btCPM, btZX, btZX128, btZXN, btAgon, btCPC);
 
   (**
    * The possible output formats.
@@ -1593,7 +1593,7 @@ begin
   SizeFunc := RegisterMagic(scFunc, 'SizeOf');
   SuccFunc := RegisterMagic(scFunc, 'Succ');
 
-  if (Binary = btCPM) or (Binary = btAmstrad) then
+  if (Binary = btCPM) or (Binary = btCPC) then
   begin
     BDosFunc := RegisterMagic(scFunc, 'Bdos');
     BDosHLFunc := RegisterMagic(scFunc, 'BdosHL');
@@ -2973,7 +2973,7 @@ begin
                 EmitI('device ZXSPECTRUMNEXT');
               end;
 
-    btAmstrad:begin
+    btCPC:begin
                 SetDefine('CPU_Z80', True);
                 SetDefine('SYS_CPC', True);
                 EmitI('device NOSLOT64K');
@@ -3096,7 +3096,7 @@ begin
 
   if Binary = btCPM then
     EmitI('savebin "' + BinFile + '",$0100,HEAP-$0100')
-  else if Binary = btAmstrad then
+  else if Binary = btCPC then
     EmitI('savebin "' + BinFile + '",$0100,HEAP-$0100')
   else if Binary = btAgon then
   begin
@@ -7924,7 +7924,7 @@ begin
     OpenInput(HomeDir + '/rtl/zx128.pas')
   else if Binary = btAgon then
     OpenInput(HomeDir + '/rtl/agon.pas')
-  else if Binary = btAmstrad then
+  else if Binary = btCPC then
     OpenInput(HomeDir + '/rtl/amstrad.pas')
   else
     OpenInput(HomeDir + '/rtl/next.pas');
@@ -7987,7 +7987,7 @@ begin
 
   if Binary = btCPM then
     BinFile := ChangeExt(SrcFile, '.com')
-  else if Binary = btAmstrad then
+  else if Binary = btCPC then
     BinFile := ChangeExt(SrcFile, '')
   else if Format in [tfBinary, tfPlus3Dos, tfMOSlet] then
     BinFile := ChangeExt(SrcFile, '.bin')
@@ -8053,14 +8053,14 @@ begin
       AddrOrigin := $0100
     else if Binary = btAgon then
       AddrOrigin := $0000
-    else if Binary = btAmstrad then
+    else if Binary = btCPC then
       AddrOrigin := $0100
     else
       AddrOrigin := $8000;
 
     if Binary = btCPM then
       AddrLimit := $f000
-    else if Binary = btAmstrad then
+    else if Binary = btCPC then
       AddrLimit := $BE00
     else if (Binary = btZX128) and Overlays then
       AddrLimit := $c000
@@ -8102,7 +8102,7 @@ begin
     if DosExitCode <> 0 then
       Error('Assembly failed (see output for details).');
 
-    if Binary = btAmstrad then
+    if Binary = btCPC then
       AddAMSDOSHeader(BinFile, ChangeExt(NameOnly(SrcFile), ''));
 
     Duration := (GetMSCount - StartTime) / 1000.0;
@@ -8196,7 +8196,7 @@ begin
     btZX, 
     btZX128:  SupportsFormat := Format in [tfBinary, tfPlus3Dos, tfTape, tfSnapshot];
     btZXN:    SupportsFormat := Format in [tfBinary, tfPlus3Dos, tfTape, tfRunDir];
-    btAmstrad:SupportsFormat := Format = tfBinary;
+    btCPC:SupportsFormat := Format = tfBinary;
   end;
 end;
 
@@ -8209,7 +8209,7 @@ begin
     btAgon:   SupportsOverlays := Format = tfBinary;
     btCPM,
     btZX,
-    btAmstrad:SupportsOverlays := False;
+    btCPC:SupportsOverlays := False;
     btZX128,
     btZXN:    SupportsOverlays := True;
   end;
@@ -8695,7 +8695,7 @@ begin
     else if SrcFile = '--agon' then
       Binary := btAgon
     else if SrcFile = '--cpc' then
-      Binary := btAmstrad
+      Binary := btCPC
     else if SrcFile = '--ovr' then
       Overlays := True
     else if SrcFile = '--bin' then
