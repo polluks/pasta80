@@ -527,7 +527,7 @@ type
   (**
    * The three platforms we currently support.
    *)
-  TBinaryType = (btCPM, btZX, btZX128, btZXN, btAgon);
+  TBinaryType = (btCPM, btZX, btZX128, btZXN, btAgon, btAmstrad);
 
   (**
    * The possible output formats.
@@ -1507,7 +1507,7 @@ begin
   SizeFunc := RegisterMagic(scFunc, 'SizeOf');
   SuccFunc := RegisterMagic(scFunc, 'Succ');
 
-  if Binary = btCPM then
+  if (Binary = btCPM) or (Binary = btAmstrad) then
   begin
     BDosFunc := RegisterMagic(scFunc, 'Bdos');
     BDosHLFunc := RegisterMagic(scFunc, 'BdosHL');
@@ -2886,6 +2886,12 @@ begin
                 SetDefine('SYS_ZXNEXT', True);
                 EmitI('device ZXSPECTRUMNEXT');
               end;
+
+    btAmstrad:begin
+                SetDefine('CPU_Z80', True);
+                SetDefine('SYS_CPC', True);
+                EmitI('device NOSLOT64K');
+              end;
   end;
 
   EmitI('org $' + IntToHex(AddrOrigin, 4));
@@ -3003,6 +3009,8 @@ begin
   end;
 
   if Binary = btCPM then
+    EmitI('savebin "' + BinFile + '",$0100,HEAP-$0100')
+  else if Binary = btAmstrad then
     EmitI('savebin "' + BinFile + '",$0100,HEAP-$0100')
   else if Binary = btAgon then
   begin
@@ -7830,6 +7838,8 @@ begin
     OpenInput(HomeDir + '/rtl/zx128.pas')
   else if Binary = btAgon then
     OpenInput(HomeDir + '/rtl/agon.pas')
+  else if Binary = btAmstrad then
+    OpenInput(HomeDir + '/rtl/amstrad.pas')
   else
     OpenInput(HomeDir + '/rtl/next.pas');
 
@@ -7891,6 +7901,8 @@ begin
 
   if Binary = btCPM then
     BinFile := ChangeExt(SrcFile, '.com')
+  else if Binary = btAmstrad then
+    BinFile := ChangeExt(SrcFile, '.cpc')
   else if Format in [tfBinary, tfPlus3Dos, tfMOSlet] then
     BinFile := ChangeExt(SrcFile, '.bin')
   else if Format = tfRunDir then
@@ -7955,11 +7967,15 @@ begin
       AddrOrigin := $0100
     else if Binary = btAgon then
       AddrOrigin := $0000
+    else if Binary = btAmstrad then
+      AddrOrigin := $0100
     else
       AddrOrigin := $8000;
 
     if Binary = btCPM then
       AddrLimit := $f000
+    else if Binary = btAmstrad then
+      AddrLimit := $BE00
     else if (Binary = btZX128) and Overlays then
       AddrLimit := $c000
     else if (Binary = btZXN) and Overlays then
@@ -8024,7 +8040,7 @@ const
   (**
    * Printable names of supported platforms. Must be aligned with TBinaryType.
    *)
-  BinaryStr: array[TBinaryType] of String = ('CP/M', 'ZX 48K', 'ZX 128K', 'ZX Next', 'Agon');
+  BinaryStr: array[TBinaryType] of String = ('CP/M', 'ZX 48K', 'ZX 128K', 'ZX Next', 'Agon', 'Amstrad CPC');
 
   (**
    * Printable names of supported formats. Must be aligned with TTargetFormat.
@@ -8091,6 +8107,7 @@ begin
     btZX, 
     btZX128:  SupportsFormat := Format in [tfBinary, tfPlus3Dos, tfTape, tfSnapshot];
     btZXN:    SupportsFormat := Format in [tfBinary, tfPlus3Dos, tfTape, tfRunDir];
+    btAmstrad:SupportsFormat := Format = tfBinary;
   end;
 end;
 
@@ -8102,7 +8119,8 @@ begin
   case Binary of
     btAgon:   SupportsOverlays := Format = tfBinary;
     btCPM,
-    btZX:     SupportsOverlays := False;
+    btZX,
+    btAmstrad:SupportsOverlays := False;
     btZX128,
     btZXN:    SupportsOverlays := True;
   end;
@@ -8548,6 +8566,7 @@ begin
     WriteLn('  --zx128        Sets target to ZX Spectrum 128K');
     WriteLn('  --zxnext       Sets target to ZX Spectrum Next');
     WriteLn('  --agon         Sets target to Agon Light/Console8');
+    WriteLn('  --cpc          Sets target to Amstrad CPC');
     WriteLn;
     WriteLn('  --bin          Generates raw binary file (default)');
     WriteLn('  --3dos         Generates binary with +3DOS header');
@@ -8586,6 +8605,8 @@ begin
       Binary := btZXN
     else if SrcFile = '--agon' then
       Binary := btAgon
+    else if SrcFile = '--cpc' then
+      Binary := btAmstrad
     else if SrcFile = '--ovr' then
       Overlays := True
     else if SrcFile = '--bin' then
