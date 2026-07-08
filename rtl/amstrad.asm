@@ -1,15 +1,27 @@
 ;
-; Amstrad CPC firmware entry points
+; Amstrad CPC firmware jumpblock entries
 ;
-TXT_OUTPUT       EQU $BB5A
+KM_WAIT_KEY      EQU $BB18
 KM_READ_KEY      EQU $BB1B
-KM_TEST_KEY      EQU $BB18
-TXT_SET_CURSOR   EQU $BB5D
-TXT_GET_CURSOR   EQU $BB60
-TXT_CLEAR_WINDOW EQU $BB66
-TXT_SET_PEN      EQU $BB63
-TXT_SET_PAPER    EQU $BB64
-MC_WAIT_FLYBACK  EQU $BB4D
+KM_TEST_KEY      EQU $BB1E
+TXT_OUTPUT       EQU $BB5A
+TXT_WR_CHAR      EQU $BB5D
+TXT_RD_CHAR      EQU $BB60
+TXT_SET_GRAPHIC  EQU $BB63
+TXT_WIN_ENABLE   EQU $BB66
+TXT_GET_WINDOW   EQU $BB69
+TXT_CLEAR_WINDOW EQU $BB6C
+TXT_SET_COLUMN   EQU $BB6F
+TXT_SET_ROW      EQU $BB72
+TXT_SET_CURSOR   EQU $BB75
+TXT_GET_CURSOR   EQU $BB78
+TXT_CUR_ENABLE   EQU $BB7B
+TXT_CUR_DISABLE  EQU $BB7E
+TXT_CUR_ON       EQU $BB81
+TXT_CUR_OFF      EQU $BB84
+TXT_SET_PEN      EQU $BB90
+TXT_SET_PAPER    EQU $BB96
+MC_WAIT_FLYBACK  EQU $BD19
 SCR_SET_MODE     EQU $BC0E
 
 ;
@@ -17,7 +29,7 @@ SCR_SET_MODE     EQU $BC0E
 ;
 ; Entry:  A (ASCII code)
 ; Exit:   -
-; Uses:   IX
+; Uses:   IX preserved by firmware
 ;
 __putc:
                 push    ix
@@ -60,16 +72,26 @@ __newline:
                 ret
 
 ;
-; Read a key from keyboard (blocking)
+; Read a key from keyboard (blocking, using KM_WAIT_KEY)
+; Returns keycode in L for Pascal ReadKey
 ;
 __readkey:
-__readkey1:     push    ix
-                call    KM_TEST_KEY
+                push    ix
+                call    KM_WAIT_KEY
                 pop     ix
-                jr      nc,__readkey1
+                ld      l,a
+                ld      h,0
+                ret
+
+;
+; Read a key from keyboard buffer (KM_READ_KEY)
+;
+__readkey_fw:
                 push    ix
                 call    KM_READ_KEY
                 pop     ix
+                ld      l,a
+                ld      h,0
                 ret
 
 ;
@@ -80,7 +102,8 @@ __getline:
                 ld      (__lineptr),hl
                 xor     a
                 ld      (__linelen),a
-__readline1:    call    __readkey
+__readline1:
+                call    __readkey
                 cp      ' '
                 jr      c, __readline2
                 cp      127
@@ -119,11 +142,10 @@ __readline3:
                 ret
 
 ;
-; Set text foreground color
+; Set text foreground color (TXT_SET_PEN)
 ;
-; Entry:  L (color 0-15)
+; Entry:  L (pen number 0-15)
 ; Exit:   -
-; Uses:   IX
 ;
 __textfg:       push    ix
                 ld      a,l
@@ -132,11 +154,10 @@ __textfg:       push    ix
                 ret
 
 ;
-; Set text background color
+; Set text background color (TXT_SET_PAPER)
 ;
-; Entry:  L (color 0-15)
+; Entry:  L (paper number 0-15)
 ; Exit:   -
-; Uses:   IX
 ;
 __textbg:       push    ix
                 ld      a,l
@@ -146,38 +167,26 @@ __textbg:       push    ix
 
 ;
 ; Move cursor to column X, row Y
+; TXT_SET_CURSOR: H=column (X), L=row (Y)
 ;
 ; Entry:  L = X (column), E = Y (row)
 ; Exit:   -
-; Uses:   IX
 ;
-__gotoxy:       ld      h,e
+__gotoxy:       ld      h,l
+                ld      l,e
                 push    ix
                 call    TXT_SET_CURSOR
                 pop     ix
                 ret
 
 ;
-; Get cursor column
+; Get cursor column (X)
+; TXT_GET_CURSOR: H=column, L=row
 ;
 ; Entry:  -
-; Exit:   HL (column)
-; Uses:   IX
+; Exit:   HL = column
 ;
 __wherex:       push    ix
-                call    TXT_GET_CURSOR
-                pop     ix
-                ld      h,0
-                ret
-
-;
-; Get cursor row
-;
-; Entry:  -
-; Exit:   HL (row)
-; Uses:   IX
-;
-__wherey:       push    ix
                 call    TXT_GET_CURSOR
                 pop     ix
                 ld      l,h
@@ -185,83 +194,70 @@ __wherey:       push    ix
                 ret
 
 ;
-; Clear screen
+; Get cursor row (Y)
+; TXT_GET_CURSOR: H=column, L=row
 ;
 ; Entry:  -
-; Exit:   -
-; Uses:   IX
+; Exit:   HL = row
 ;
-__clrscr:       push    ix
-                ld      hl,0
-                ld      de,$4F18
-                call    TXT_CLEAR_WINDOW
-                pop     ix
-                ret
-
-;
-; Clear to end of line
-;
-; Entry:  -
-; Exit:   -
-; Uses:   IX
-;
-__clreol:       push    ix
+__wherey:       push    ix
                 call    TXT_GET_CURSOR
-                ld      a,h
-                ld      h,l
-                ld      l,a
-                ld      d,79
-                ld      e,a
-                call    TXT_CLEAR_WINDOW
                 pop     ix
+                ld      h,0
                 ret
 
 ;
-; Clear to end of screen
+; Clear screen (send control code 12 = FF = clear window)
 ;
-; Entry:  -
-; Exit:   -
-; Uses:   IX
-;
-__clreos:       push    ix
-                call    TXT_GET_CURSOR
-                ld      a,h
-                ld      h,l
-                ld      l,a
-                ld      d,79
-                ld      e,24
-                call    TXT_CLEAR_WINDOW
-                pop     ix
-                ret
+__clrscr:       ld      a,12
+                jp      __putc
 
 ;
-; Cursor on/off (no-op on CPC)
+; Clear to end of line (send control code 18 = DC2)
+;
+__clreol:       ld      a,18
+                jp      __putc
+
+;
+; Clear to end of screen (send control code 20 = DC4)
+;
+__clreos:       ld      a,20
+                jp      __putc
+
+;
+; Cursor on
 ;
 __cursor_on:
-__cursor_off:
+                push    ix
+                call    TXT_CUR_ON
+                pop     ix
                 ret
 
 ;
-; Keyboard test (returns NZ if key pressed, A=keycode, Cy=1 if pressed)
+; Cursor off
+;
+__cursor_off:
+                push    ix
+                call    TXT_CUR_OFF
+                pop     ix
+                ret
+
+;
+; Keyboard test (returns HL=1 if key pressed, HL=0 if not)
+;
+; Entry:  -
+; Exit:   HL = 1 if key pressed, 0 otherwise
 ;
 __keypressed:   push    ix
                 call    KM_TEST_KEY
                 pop     ix
-                ret
-
-;
-; Read key (blocking, returns A=keycode)
-;
-__readkey_fw:   push    ix
-                call    KM_READ_KEY
-                pop     ix
+                ld      hl,0
+                ret     nc
+                inc     l
                 ret
 
 ;
 ; Wait for one VSync (approx 20ms)
-;
-; Entry: -
-; Exit:  -
 ;
 __delayvsync:   push    ix
                 call    MC_WAIT_FLYBACK
@@ -269,18 +265,18 @@ __delayvsync:   push    ix
                 ret
 
 ;
-; Check for Ctrl-C break
+; Check for Ctrl-C break (non-blocking)
 ;
 __checkbreak:
                 push    ix
                 call    KM_TEST_KEY
                 pop     ix
                 ret     nc
+                cp      3
+                ret     nz
                 push    ix
                 call    KM_READ_KEY
                 pop     ix
-                cp      3
-                ret     nz
                 rst     0
 
 ;

@@ -520,6 +520,92 @@ begin
 end;
 
 (* -------------------------------------------------------------------------- *)
+(* --- AMSDOS header ------------------------------------------------------- *)
+(* -------------------------------------------------------------------------- *)
+
+(**
+ * Prepends a 128-byte AMSDOS header to the given binary, so the file
+ * can be loaded via LOAD"file.cpc" without specifying an address.
+ *)
+procedure AddAMSDOSHeader(const BinFile: String; const ProgName: String);
+const
+  HEADER_SIZE = 128;
+var
+  F: File;
+  Header: array[0..HEADER_SIZE - 1] of Byte;
+  Data: array of Byte;
+  Size, I, LoMid: Integer;
+  Checksum: Word;
+  Name: String;
+begin
+  Assign(F, BinFile);
+  Reset(F, 1);
+  Size := FileSize(F);
+  if Size = 0 then
+  begin
+    Close(F);
+    Exit;
+  end;
+
+  FillChar(Header, HEADER_SIZE, 0);
+
+  // Filename (bytes 1-8), left-justified space-padded
+  Name := ProgName;
+  if Length(Name) > 8 then SetLength(Name, 8);
+  for I := 1 to Length(Name) do
+    Header[I] := Byte(Name[I]);
+  for I := Length(Name) + 1 to 8 do
+    Header[I] := Byte(' ');
+
+  // Extension (bytes 9-11)
+  Header[9] := Byte('B');
+  Header[10] := Byte('I');
+  Header[11] := Byte('N');
+
+  // File type at byte 18 (2 = binary)
+  Header[18] := 2;
+
+  // Load address at bytes 21-22 ($0100)
+  Header[21] := $00;
+  Header[22] := $01;
+
+  // First block flag at byte 23
+  Header[23] := $FF;
+
+  // Logical length at bytes 24-25 (same as data length low/mid)
+  LoMid := Size;
+  Header[24] := Byte(LoMid and $FF);
+  Header[25] := Byte((LoMid shr 8) and $FF);
+
+  // Entry address at bytes 26-27 ($0100)
+  Header[26] := $00;
+  Header[27] := $01;
+
+  // 24-bit data length at bytes 64-66
+  Header[64] := Byte(Size and $FF);
+  Header[65] := Byte((Size shr 8) and $FF);
+  Header[66] := Byte((Size shr 16) and $FF);
+
+  // Checksum at bytes 67-68 (sum of bytes 0-65)
+  Checksum := 0;
+  for I := 0 to 65 do
+    Checksum := Checksum + Header[I];
+  Header[67] := Byte(Checksum and $FF);
+  Header[68] := Byte((Checksum shr 8) and $FF);
+
+  // Read existing data
+  SetLength(Data, Size);
+  BlockRead(F, Data[0], Size);
+  Close(F);
+
+  // Write header + data back
+  Rewrite(F, 1);
+  BlockWrite(F, Header, HEADER_SIZE);
+  BlockWrite(F, Data[0], Size);
+  Close(F);
+end;
+
+(* -------------------------------------------------------------------------- *)
 (* --- Config handling ------------------------------------------------------ *)
 (* -------------------------------------------------------------------------- *)
 
@@ -8015,6 +8101,9 @@ begin
       Error('Error ' + IntToStr(DosError) + ' starting assembler');
     if DosExitCode <> 0 then
       Error('Assembly failed (see output for details).');
+
+    if Binary = btAmstrad then
+      AddAMSDOSHeader(BinFile, ChangeExt(NameOnly(SrcFile), ''));
 
     Duration := (GetMSCount - StartTime) / 1000.0;
 
