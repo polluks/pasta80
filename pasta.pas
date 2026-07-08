@@ -611,7 +611,7 @@ end;
 
 type
   (**
-    * The platforms we currently support.
+    * The four platforms we currently support.
    *)
   TBinaryType = (btCPM, btZX, btZX128, btZXN, btAgon, btAmstrad);
 
